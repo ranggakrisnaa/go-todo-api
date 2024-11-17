@@ -1,0 +1,8 @@
+BEGIN;
+
+DROP TABLE IF EXISTS todos;
+ALTER TABLE todos DROP CONSTRAINT fk_user;
+DROP INDEX IF EXISTS todos_id_key;
+DROP INDEX IF EXISTS todos_user_id_idx;
+
+COMMIT;
