@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"                     // Correct import
-	_ "github.com/golang-migrate/migrate/v4/database/postgres" // PostgreSQL driver
-	_ "github.com/golang-migrate/migrate/v4/source/file"       // File source driver
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -32,9 +32,14 @@ func NewPostgresConfig() *PostgresConfig {
 }
 
 func (config *PostgresConfig) NewPostgresConnection() *gorm.DB {
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		config.Host, config.Port, config.User, config.Password, config.DBName)
-
+	var dsn string
+	if config.Password == "" {
+		dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable",
+			config.Host, config.Port, config.User, config.DBName)
+	} else {
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			config.Host, config.Port, config.User, config.Password, config.DBName)
+	}
 	dbConn, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)

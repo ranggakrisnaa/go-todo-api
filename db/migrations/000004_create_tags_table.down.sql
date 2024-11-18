@@ -1,8 +1,0 @@
-BEGIN;
-
-DROP TABLE IF EXISTS tags;
-DROP INDEX IF EXISTS todo_tags_tags_id_idx;
-DROP INDEX IF EXISTS tags_id_key;
-ALTER TABLE todo_tags DROP CONSTRAINT IF EXISTS fk_tag;
-
-COMMIT;

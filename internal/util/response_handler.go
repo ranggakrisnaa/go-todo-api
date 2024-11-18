@@ -22,11 +22,10 @@ func SendSuccess(c *gin.Context, statusCode int, message string, data interface{
 	})
 }
 
-func SendError(c *gin.Context, statusCode int, message string, data interface{}) {
+func SendError(c *gin.Context, statusCode int, message string) {
 	c.JSON(statusCode, Response{
 		Status:     false,
 		StatusCode: statusCode,
 		Message:    message,
-		Data:       data,
 	})
 }

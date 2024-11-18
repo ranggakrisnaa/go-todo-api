@@ -18,6 +18,7 @@ type Todo struct {
 	CreatedAt   time.Time      `gorm:"default:current_timestamp" json:"created_at"`
 	UpdatedAt   time.Time      `gorm:"default:current_timestamp" json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+	User        User           `gorm:"foreignKey:user_id;references:id"`
 	TodoTag     []TodoTag      `gorm:"foreignKey:todo_id;references:id"`
 }
 

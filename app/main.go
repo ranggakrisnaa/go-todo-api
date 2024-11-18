@@ -9,9 +9,17 @@ import (
 	"go-todo-api/internal/util"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+)
+
+const (
+	defaultTimeout = 10
+	defaultAddress = ":8080"
 )
 
 func init() {
@@ -25,9 +33,18 @@ func init() {
 func main() {
 	configDB := config.NewPostgresConfig()
 	dbConn := configDB.NewPostgresConnection()
+	logger := config.NewLogger()
 
 	r := gin.New()
 
+	timeoutStr := os.Getenv("CONTEXT_TIMEOUT")
+	timeout, err := strconv.Atoi(timeoutStr)
+	if err != nil {
+		log.Println("failed to parse timeout, using default timeout")
+		timeout = defaultTimeout
+	}
+	timeoutContext := time.Duration(timeout) * time.Second
+	r.Use(middleware.SetRequestContextWithTimeout(timeoutContext))
 	r.Use(gin.LoggerWithFormatter(util.CustomLogFormatter))
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORS())
@@ -36,8 +53,13 @@ func main() {
 	})
 
 	userRepo := postgresql.NewRepository(dbConn)
-	userService := usecase.NewUserUseCase(userRepo)
-	rest.NewUserHandler(r, userService)
+	userService := usecase.NewUserUseCase(userRepo, dbConn, logger)
+	rest.NewUserHandler(r, userService, logger)
 
-	r.Run(":8080")
+	address := os.Getenv("SERVER_ADDRESS")
+	if address == "" {
+		address = defaultAddress
+	}
+
+	r.Run(address)
 }
