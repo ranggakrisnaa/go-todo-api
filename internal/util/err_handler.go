@@ -12,6 +12,7 @@ const (
 	ErrInternalServerErrorCode ErrorCode = iota
 	ErrNotFoundCode
 	ErrConflictCode
+	ErrUnauthorizedCode
 )
 
 type CustomError struct {
@@ -34,6 +35,7 @@ var (
 	ErrInternalServerError = &CustomError{Code: ErrInternalServerErrorCode, Message: "Internal Server Error"}
 	ErrNotFound            = &CustomError{Code: ErrNotFoundCode, Message: "Not Found"}
 	ErrConflict            = &CustomError{Code: ErrConflictCode, Message: "Conflict"}
+	ErrUnauthorized        = &CustomError{Code: ErrUnauthorizedCode, Message: "Unauthorized"}
 )
 
 func GetStatusCode(err error) int {
@@ -52,6 +54,8 @@ func GetStatusCode(err error) int {
 			return http.StatusNotFound
 		case ErrConflictCode:
 			return http.StatusConflict
+		case ErrUnauthorizedCode:
+			return http.StatusUnauthorized
 		default:
 			return http.StatusInternalServerError
 		}

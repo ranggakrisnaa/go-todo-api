@@ -13,7 +13,8 @@ import (
 )
 
 type UserUseCase interface {
-	Create(ctx context.Context, user *entity.User) (err error)
+	Create(ctx context.Context, user *domain.RegisterUserRequest) (*entity.User, error)
+	Login(ctx context.Context, user *domain.LoginUserRequest) (*domain.UserResponse, error)
 }
 
 type UserHandler struct {
@@ -31,7 +32,7 @@ func NewUserHandler(r *gin.Engine, usc UserUseCase, log *logrus.Logger) {
 	r.POST("v1/auth/login", handler.Login)
 }
 
-func isRequestValid(u *entity.User) (bool, error) {
+func isRequestValid(u interface{}) (bool, error) {
 	validate := validator.New()
 	err := validate.Struct(u)
 	if err != nil {
@@ -42,7 +43,7 @@ func isRequestValid(u *entity.User) (bool, error) {
 
 func (u *UserHandler) Register(c *gin.Context) {
 	var (
-		user          entity.User
+		user          domain.RegisterUserRequest
 		errValidation error
 		ok            bool
 	)
@@ -59,14 +60,43 @@ func (u *UserHandler) Register(c *gin.Context) {
 		return
 	}
 
-	if err := u.UseCase.Create(c, &user); err != nil {
+	response, err := u.UseCase.Create(c, &user)
+	if err != nil {
 		u.Log.WithError(err).Error("Error creating User")
 		statusCode := util.GetStatusCode(err)
 		util.SendError(c, statusCode, err.Error())
 		return
 	}
 
-	util.SendSuccess(c, http.StatusCreated, "Success Created Data User", domain.UserToResponse(&user))
+	util.SendSuccess(c, http.StatusCreated, "Success Created Data User", domain.UserToResponse(response))
 }
 
-func (u *UserHandler) Login(c *gin.Context) {}
+func (u *UserHandler) Login(c *gin.Context) {
+	var (
+		user          domain.LoginUserRequest
+		errValidation error
+		ok            bool
+	)
+
+	if err := c.ShouldBindJSON(&user); err != nil {
+		u.Log.WithError(err).Error("Error parsing request body")
+		util.SendError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if ok, errValidation = isRequestValid(&user); !ok {
+		u.Log.WithError(errValidation).Error("Error request body validation")
+		util.SendError(c, http.StatusBadRequest, errValidation.Error())
+		return
+	}
+
+	response, err := u.UseCase.Login(c, &user)
+	if err != nil {
+		u.Log.WithError(err).Error("Error login User")
+		statusCode := util.GetStatusCode(err)
+		util.SendError(c, statusCode, err.Error())
+		return
+	}
+
+	util.SendSuccess(c, http.StatusCreated, "Success login User", response)
+}
