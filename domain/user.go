@@ -1,23 +1,24 @@
 package domain
 
 import (
-	"go-todo-api/internal/entity"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type UserResponse struct {
-	UUID  uuid.UUID `json:"uuid,omitempty"`
-	Name  string    `json:"name,omitempty"`
-	Email string    `json:"email,omitempty"`
-	Token string    `json:"token,omitempty"`
+	UUID      uuid.UUID `json:"uuid,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Email     string    `json:"email,omitempty"`
+	Token     string    `json:"token,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
 type RegisterUserRequest struct {
-	UUID     uuid.UUID `json:"uuid"`
-	Name     string    `json:"name" validate:"required,max=100"`
-	Email    string    `json:"email" validate:"required,email,max=255"`
-	Password string    `json:"password" validate:"required"`
+	Name     string `json:"name" validate:"required,max=100"`
+	Email    string `json:"email" validate:"required,email,max=255"`
+	Password string `json:"password" validate:"required"`
 }
 
 type LoginUserRequest struct {
@@ -26,10 +27,14 @@ type LoginUserRequest struct {
 	Password string    `json:"password" validate:"required,max=100"`
 }
 
-func UserToResponse(user *entity.User) *UserResponse {
-	return &UserResponse{
-		UUID:  user.UUID,
-		Name:  user.Name,
-		Email: user.Email,
-	}
+type GetUserId struct {
+	ID uint `json:"id"`
+}
+
+type CurrentUserRequest struct {
+	GetUserId
+}
+
+type LogoutUserRequest struct {
+	GetUserId
 }

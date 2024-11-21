@@ -1,19 +1,17 @@
 package entity
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type Tag struct {
-	ID        uint           `gorm:"primaryKey;autoIncrement" json:"id"`
-	UUID      uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid()" json:"uuid"`
-	Name      string         `gorm:"not null" json:"name"`
-	CreatedAt time.Time      `gorm:"default:current_timestamp" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"default:current_timestamp" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+	ID        uint           `gorm:"column:id;primaryKey"`
+	UUID      uuid.UUID      `gorm:"column:uuid"`
+	Name      string         `gorm:"column:name"`
+	CreatedAt int64          `gorm:"column:created_at;autoCreateTime:milli"`
+	UpdatedAt int64          `gorm:"column:updated_at;autoCreateTime:milli;autoUpdateTime:milli"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;autoDeleteTime:milli"`
 	TodoTag   []TodoTag      `gorm:"foreignKey:tag_id;references:id"`
 }
 

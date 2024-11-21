@@ -8,14 +8,16 @@ import (
 )
 
 type User struct {
-	ID        uint           `gorm:"primaryKey;autoIncrement"`
-	UUID      uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid()"`
-	Name      string         `gorm:"type:varchar(100);not null"`
-	Email     string         `gorm:"type:varchar(255);unique;not null"`
-	Password  string         `gorm:"type:text;not null"`
-	CreatedAt time.Time      `gorm:"default:current_timestamp"`
-	UpdatedAt time.Time      `gorm:"default:current_timestamp"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+	ID        uint           `gorm:"column:id;primaryKey"`
+	UUID      uuid.UUID      `gorm:"column:uuid;type:uuid;default:gen_random_uuid()"`
+	Name      string         `gorm:"column:name"`
+	Email     string         `gorm:"column:email"`
+	Password  string         `gorm:"column:password"`
+	Token     string         `gorm:"column:token"`
+	Role      string         `gorm:"column:role;default:'user'"`
+	CreatedAt time.Time      `gorm:"column:created_at;autoCreateTime:milli"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;autoCreateTime:milli;autoUpdateTime:milli"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;autoDeleteTime:milli"`
 	Todo      []Todo         `gorm:"foreignKey:user_id;references:id"`
 }
 

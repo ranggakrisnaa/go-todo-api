@@ -1,11 +1,9 @@
 package main
 
 import (
+	"go-todo-api/internal"
 	"go-todo-api/internal/config"
-	"go-todo-api/internal/repository/postgresql"
-	"go-todo-api/internal/rest"
 	"go-todo-api/internal/rest/middleware"
-	"go-todo-api/internal/usecase"
 	"go-todo-api/internal/util"
 	"log"
 	"net/http"
@@ -28,12 +26,13 @@ func init() {
 		log.Fatal("Error loading .env file")
 	}
 	config.RunMigrateDB()
+	middleware.NewRequiredRole()
 }
 
 func main() {
-	configDB := config.NewPostgresConfig()
-	dbConn := configDB.NewPostgresConnection()
-	logger := config.NewLogger()
+	db := config.InitPostgres()
+	logger := config.InitLogger()
+	jwtService := config.InitJwtService(logger)
 
 	r := gin.New()
 
@@ -48,13 +47,21 @@ func main() {
 	r.Use(gin.LoggerWithFormatter(util.CustomLogFormatter))
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORS())
+	r.Use()
 	r.GET("/ping", func(c *gin.Context) {
-		util.SendSuccess(c, http.StatusOK, "Success ping the server", nil)
+		c.JSON(http.StatusCreated, gin.H{
+			"success":    true,
+			"statusCode": http.StatusOK,
+			"message":    "Success get ping from server",
+		})
 	})
 
-	userRepo := postgresql.NewRepository(dbConn)
-	userService := usecase.NewUserUseCase(userRepo, dbConn, logger)
-	rest.NewUserHandler(r, userService, logger)
+	internal.Bootstrap(&internal.BootstrapConfig{
+		DB:         db,
+		Log:        logger,
+		Route:      r,
+		JwtService: jwtService,
+	})
 
 	address := os.Getenv("SERVER_ADDRESS")
 	if address == "" {

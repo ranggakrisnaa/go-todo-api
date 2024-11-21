@@ -3,13 +3,11 @@ package usecase
 import (
 	"context"
 	"go-todo-api/domain"
+	"go-todo-api/domain/converter"
+	"go-todo-api/internal/config"
 	"go-todo-api/internal/entity"
 	"go-todo-api/internal/util"
-	"os"
-	"strconv"
-	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -18,43 +16,48 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, user *entity.User) error
 	CountByEmailOrName(ctx context.Context, user *entity.User) (int64, error)
-	FindByEmailOrName(ctx context.Context, user *entity.User, email, name string) error
+	FindByEmailOrName(ctx context.Context, email string, name string) (*entity.User, error)
+	FindByUUID(ctx context.Context, uuid string) (*entity.User, error)
+	FindByID(ctx context.Context, id any) (*entity.User, error)
+	Update(ctx context.Context, user *entity.User) error
+	Delete(ctx context.Context, user *entity.User) error
 }
 
 type UserUseCase struct {
-	DB       *gorm.DB
-	Log      *logrus.Logger
-	userRepo UserRepository
+	DB         *gorm.DB
+	Log        *logrus.Logger
+	userRepo   UserRepository
+	jwtService *config.JwtConfig
 }
 
-func NewUserUseCase(u UserRepository, db *gorm.DB, logger *logrus.Logger) *UserUseCase {
+func NewUserUseCase(u UserRepository, db *gorm.DB, logger *logrus.Logger, jwtService *config.JwtConfig) *UserUseCase {
 	return &UserUseCase{
-		userRepo: u,
-		Log:      logger,
-		DB:       db,
+		userRepo:   u,
+		Log:        logger,
+		DB:         db,
+		jwtService: jwtService,
 	}
 }
 
-func (u *UserUseCase) Create(ctx context.Context, request *domain.RegisterUserRequest) (*entity.User, error) {
+func (u *UserUseCase) Create(ctx context.Context, request *domain.RegisterUserRequest) (*domain.UserResponse, error) {
 	tx := u.DB.WithContext(ctx).Begin()
 	defer tx.Rollback()
 
-	user := new(entity.User)
-	err := u.userRepo.FindByEmailOrName(tx.Statement.Context, user, request.Email, request.Name)
-	if err != nil {
+	existingUser, _ := u.userRepo.FindByEmailOrName(tx.Statement.Context, request.Email, request.Name)
+	if existingUser != nil {
 		u.Log.Warnf("Error checking for existing user")
 		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), "User with email or name already exists")
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
 	if err != nil {
 		u.Log.WithError(err).Error("Failed to generate bcrype hash")
 		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 	}
 
 	userPayload := &entity.User{
-		Name:     user.Name,
-		Email:    user.Email,
+		Name:     request.Name,
+		Email:    request.Email,
 		Password: string(hashedPassword),
 	}
 
@@ -68,16 +71,15 @@ func (u *UserUseCase) Create(ctx context.Context, request *domain.RegisterUserRe
 		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 	}
 
-	u.Log.Infof("User successfully created: %+v", user)
-	return user, nil
+	u.Log.Infof("User successfully created: %+v", userPayload)
+	return converter.UserToResponse(userPayload), nil
 }
 
 func (u *UserUseCase) Login(ctx context.Context, request *domain.LoginUserRequest) (*domain.UserResponse, error) {
 	tx := u.DB.WithContext(ctx).Begin()
 	defer tx.Rollback()
 
-	user := new(entity.User)
-	err := u.userRepo.FindByEmailOrName(tx.Statement.Context, user, request.Email, "")
+	user, err := u.userRepo.FindByEmailOrName(tx.Statement.Context, request.Email, "")
 	if err != nil {
 		u.Log.WithError(err).Error("Failed to found user")
 		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
@@ -88,21 +90,16 @@ func (u *UserUseCase) Login(ctx context.Context, request *domain.LoginUserReques
 		return nil, util.NewCustomError(int(util.ErrUnauthorizedCode), err.Error())
 	}
 
-	jwtKey := os.Getenv("JWT_KEY")
-	expJwt := os.Getenv("JWT_EXP")
-	expJwtConv, _ := strconv.Atoi(expJwt)
-	if jwtKey == "" || expJwt == "" {
-		jwtKey = "private"
-		expJwtConv = 72
-
-	}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.UUID,
-		"exp": time.Now().Add(time.Hour * time.Duration(expJwtConv)).Unix(),
-	}).SignedString([]byte(jwtKey))
+	token, err := u.jwtService.CreateToken(user)
 	if err != nil {
-		u.Log.WithError(err).Error("Failed to create jwt tokne")
+		u.Log.WithError(err).Error("Failed to create jwt token")
 		return nil, util.NewCustomError(int(util.ErrUnauthorizedCode), err.Error())
+	}
+
+	user.Token = token
+	if err := u.userRepo.Update(tx.Statement.Context, user); err != nil {
+		u.Log.WithError(err).Error("Failed to update user")
+		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -110,10 +107,66 @@ func (u *UserUseCase) Login(ctx context.Context, request *domain.LoginUserReques
 		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 	}
 
-	response := &domain.UserResponse{
-		UUID:  user.UUID,
-		Token: token,
+	return converter.UserToResponseWithToken(user, token), nil
+}
+
+func (u *UserUseCase) GetUserID(ctx context.Context, request *domain.GetUserId) (*entity.User, error) {
+	tx := u.DB.WithContext(ctx).Begin()
+	defer tx.Rollback()
+
+	user, err := u.userRepo.FindByID(tx.Statement.Context, request.ID)
+	if err != nil {
+		u.Log.WithError(err).Error("Failed to find user by UUID")
+		return nil, util.NewCustomError(int(util.ErrNotFoundCode), "User not found")
 	}
 
-	return response, nil
+	if err := tx.Commit().Error; err != nil {
+		u.Log.WithError(err).Error("Failed to commit transaction")
+		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	u.Log.Infof("User ID found: %d", user.ID)
+	return user, nil
+}
+
+func (u *UserUseCase) Logout(ctx context.Context, request *domain.LogoutUserRequest) (bool, error) {
+	tx := u.DB.WithContext(ctx).Begin()
+	defer tx.Rollback()
+
+	user, err := u.userRepo.FindByID(tx.Statement.Context, request.ID)
+	if err != nil {
+		u.Log.WithError(err).Error("Failed to found user")
+		return false, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	user.Token = ""
+	if err := u.userRepo.Update(tx.Statement.Context, user); err != nil {
+		u.Log.WithError(err).Error("Failed to update token user")
+		return false, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		u.Log.WithError(err).Error("Failed to commit transaction")
+		return false, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	return true, nil
+}
+
+func (u *UserUseCase) Current(ctx context.Context, request *domain.CurrentUserRequest) (*domain.UserResponse, error) {
+	tx := u.DB.WithContext(ctx).Begin()
+	defer tx.Rollback()
+
+	user, err := u.userRepo.FindByID(tx.Statement.Context, request.ID)
+	if err != nil {
+		u.Log.WithError(err).Error("Failed to found user")
+		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		u.Log.WithError(err).Error("Failed to commit transaction")
+		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	return converter.UserToResponse(user), nil
 }

@@ -3,7 +3,7 @@ package rest
 import (
 	"context"
 	"go-todo-api/domain"
-	"go-todo-api/internal/entity"
+	"go-todo-api/internal/rest/middleware"
 	"go-todo-api/internal/util"
 	"net/http"
 
@@ -13,8 +13,10 @@ import (
 )
 
 type UserUseCase interface {
-	Create(ctx context.Context, user *domain.RegisterUserRequest) (*entity.User, error)
+	Create(ctx context.Context, user *domain.RegisterUserRequest) (*domain.UserResponse, error)
 	Login(ctx context.Context, user *domain.LoginUserRequest) (*domain.UserResponse, error)
+	Logout(ctx context.Context, request *domain.LogoutUserRequest) (bool, error)
+	Current(ctx context.Context, request *domain.CurrentUserRequest) (*domain.UserResponse, error)
 }
 
 type UserHandler struct {
@@ -22,14 +24,17 @@ type UserHandler struct {
 	UseCase UserUseCase
 }
 
-func NewUserHandler(r *gin.Engine, usc UserUseCase, log *logrus.Logger) {
+func NewUserHandler(r *gin.Engine, u UserUseCase, log *logrus.Logger, authMiddleware gin.HandlerFunc) {
 	handler := &UserHandler{
-		UseCase: usc,
+		UseCase: u,
 		Log:     log,
 	}
 
-	r.POST("v1/auth/register", handler.Register)
-	r.POST("v1/auth/login", handler.Login)
+	r.POST("v1/users", handler.Register)
+	r.POST("v1/users/_login", handler.Login)
+	r.Use(authMiddleware)
+	r.DELETE("v1/users", handler.Logout)
+	r.GET("v1/users/_current", handler.Current)
 }
 
 func isRequestValid(u interface{}) (bool, error) {
@@ -50,25 +55,29 @@ func (u *UserHandler) Register(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&user); err != nil {
 		u.Log.WithError(err).Error("Error parsing request body")
-		util.SendError(c, http.StatusBadRequest, err.Error())
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": err.Error()})
 		return
 	}
 
 	if ok, errValidation = isRequestValid(&user); !ok {
 		u.Log.WithError(errValidation).Error("Error request body validation")
-		util.SendError(c, http.StatusBadRequest, errValidation.Error())
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": errValidation.Error()})
 		return
 	}
 
 	response, err := u.UseCase.Create(c, &user)
 	if err != nil {
 		u.Log.WithError(err).Error("Error creating User")
-		statusCode := util.GetStatusCode(err)
-		util.SendError(c, statusCode, err.Error())
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
 		return
 	}
 
-	util.SendSuccess(c, http.StatusCreated, "Success Created Data User", domain.UserToResponse(response))
+	c.JSON(http.StatusCreated, domain.Response[*domain.UserResponse]{
+		Status:     true,
+		StatusCode: http.StatusCreated,
+		Message:    "User created successfully",
+		Data:       response,
+	})
 }
 
 func (u *UserHandler) Login(c *gin.Context) {
@@ -80,23 +89,74 @@ func (u *UserHandler) Login(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&user); err != nil {
 		u.Log.WithError(err).Error("Error parsing request body")
-		util.SendError(c, http.StatusBadRequest, err.Error())
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": err.Error()})
 		return
 	}
 
 	if ok, errValidation = isRequestValid(&user); !ok {
 		u.Log.WithError(errValidation).Error("Error request body validation")
-		util.SendError(c, http.StatusBadRequest, errValidation.Error())
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": errValidation.Error()})
 		return
 	}
 
 	response, err := u.UseCase.Login(c, &user)
 	if err != nil {
 		u.Log.WithError(err).Error("Error login User")
-		statusCode := util.GetStatusCode(err)
-		util.SendError(c, statusCode, err.Error())
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
 		return
 	}
 
-	util.SendSuccess(c, http.StatusCreated, "Success login User", response)
+	c.JSON(http.StatusOK, domain.Response[*domain.UserResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "User login successfully",
+		Data:       response,
+	})
+}
+
+func (u *UserHandler) Logout(c *gin.Context) {
+	auth := middleware.GetUser(c)
+
+	request := &domain.LogoutUserRequest{
+		GetUserId: domain.GetUserId{
+			ID: auth.ID,
+		},
+	}
+
+	_, err := u.UseCase.Logout(c, request)
+	if err != nil {
+		u.Log.WithError(err).Error("Error logging out user")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, domain.Response[*domain.UserResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "User logged out successfully",
+	})
+}
+
+func (u *UserHandler) Current(c *gin.Context) {
+	auth := middleware.GetUser(c)
+
+	request := &domain.CurrentUserRequest{
+		GetUserId: domain.GetUserId{
+			ID: auth.ID,
+		},
+	}
+
+	response, err := u.UseCase.Current(c, request)
+	if err != nil {
+		u.Log.WithError(err).Error("Error logging out user")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, domain.Response[*domain.UserResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "User data retrieved successfully",
+		Data:       response,
+	})
 }

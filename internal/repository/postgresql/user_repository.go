@@ -8,15 +8,15 @@ import (
 )
 
 type UserRepository struct {
+	*BaseRepository[entity.User]
 	DB *gorm.DB
 }
 
-func NewRepository(db *gorm.DB) *UserRepository {
-	return &UserRepository{DB: db}
-}
-
-func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
-	return r.DB.WithContext(ctx).Create(user).Error
+func NewUserRepository(db *gorm.DB) *UserRepository {
+	return &UserRepository{
+		BaseRepository: NewBaseRepository[entity.User](db),
+		DB:             db,
+	}
 }
 
 func (r *UserRepository) CountByEmailOrName(ctx context.Context, user *entity.User) (int64, error) {
@@ -25,11 +25,19 @@ func (r *UserRepository) CountByEmailOrName(ctx context.Context, user *entity.Us
 	return count, err
 }
 
-func (r *UserRepository) FindByEmailOrName(ctx context.Context, user *entity.User, email, name string) error {
-	err := r.DB.WithContext(ctx).Where("email = ? OR name = ? ", email, name).First(&user).Error
-	if err != nil {
-		return err
+func (r *UserRepository) FindByEmailOrName(ctx context.Context, email string, name string) (*entity.User, error) {
+	var user entity.User
+	if err := r.DB.WithContext(ctx).Where("email = ? OR name = ?", email, name).First(&user).Error; err != nil {
+		return nil, err
 	}
+	return &user, nil
+}
 
-	return err
+func (r *UserRepository) FindByUUID(ctx context.Context, uuid string) (*entity.User, error) {
+	var user entity.User
+	err := r.DB.WithContext(ctx).Where("uuid = ? ", uuid).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
