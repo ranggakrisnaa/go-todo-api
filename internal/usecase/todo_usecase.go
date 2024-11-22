@@ -13,6 +13,8 @@ import (
 
 type TodoRepository interface {
 	Create(ctx context.Context, todo *entity.Todo) error
+	FindByID(ctx context.Context, id any) (*entity.Todo, error)
+	Update(ctx context.Context, todo *entity.Todo) error
 }
 
 type TodoUsecase struct {
@@ -49,6 +51,53 @@ func (t *TodoUsecase) Create(ctx context.Context, requests []*domain.TodoCreateR
 			t.Log.WithError(err).Error("Failed to create user")
 			return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 		}
+
+		todos = append(todos, &domain.TodoResponse{
+			UUID:        todo.UUID,
+			Title:       todo.Title,
+			Description: todo.Description,
+			IsCompleted: todo.IsCompleted,
+			DueTime:     todo.DueTime,
+			CreatedAt:   todo.CreatedAt,
+			UpdatedAt:   todo.UpdatedAt,
+		})
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		t.Log.WithError(err).Error("Failed to commit transaction")
+		tx.Rollback()
+		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	return todos, nil
+}
+
+func (t *TodoUsecase) Update(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error) {
+	tx := t.DB.WithContext(ctx).Begin()
+
+	var todos []*domain.TodoResponse
+
+	for _, request := range requests {
+		todo, err := t.TodoRepo.FindByID(tx.Statement.Context, request.ID)
+		if err != nil {
+
+		}
+
+		if request.Title != "" {
+			todo.Title = request.Title
+		}
+
+		if request.Description != "" {
+			todo.Description = request.Description
+		}
+		todo.IsCompleted = request.IsCompleted
+		todo.DueTime = request.DueTime
+
+		if err := t.TodoRepo.Update(tx.Statement.Context, todo); err != nil {
+			t.Log.WithError(err).Error("Failed to create user")
+			return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+		}
+
 		todos = append(todos, &domain.TodoResponse{
 			UUID:        todo.UUID,
 			Title:       todo.Title,
