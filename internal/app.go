@@ -19,8 +19,6 @@ type BootstrapConfig struct {
 	JwtService *config.JwtConfig
 }
 
-func init() {}
-
 func Bootstrap(config *BootstrapConfig) {
 	userRepo := postgresql.NewUserRepository(config.DB)
 	userUsecase := usecase.NewUserUseCase(userRepo, config.DB, config.Log, config.JwtService)
