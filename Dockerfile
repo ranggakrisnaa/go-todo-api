@@ -1,31 +1,25 @@
-FROM golang:1.23.2 AS build
+FROM golang:1.20.7-alpine3.17 as builder
 
-WORKDIR /build
-
-COPY go.mod go.sum ./
-
-RUN go mod tidy
-
-COPY . .
-
-COPY .env ./.env
-
-WORKDIR /build/app
-
-RUN CGO_ENABLED=0 go build -o app main.go
-
-FROM alpine:latest
-
-RUN apk update && apk add --no-cache tzdata
+RUN apk update && apk upgrade && \
+    apk --update add git make bash build-base
 
 WORKDIR /app
 
-COPY --from=build /build/app/app .
+COPY . .
 
-COPY --from=build /build/.env /app/.env
+RUN make build
 
-RUN chmod +x /app/app
+FROM alpine:latest
+
+RUN apk update && apk upgrade && \
+    apk --update --no-cache add tzdata && \
+    mkdir /app 
+
+WORKDIR /app 
 
 EXPOSE 9090
 
-CMD ["/app/app"]
+COPY --from=builder /app/bin/engine /app/
+
+
+CMD /app/engine
