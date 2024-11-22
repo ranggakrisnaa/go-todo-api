@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
 )
 
@@ -17,6 +16,7 @@ type UserUseCase interface {
 	Login(ctx context.Context, user *domain.LoginUserRequest) (*domain.UserResponse, error)
 	Logout(ctx context.Context, request *domain.LogoutUserRequest) (bool, error)
 	Current(ctx context.Context, request *domain.CurrentUserRequest) (*domain.UserResponse, error)
+	Update(ctx context.Context, request *domain.UserUpdateRequest) (*domain.UserResponse, error)
 }
 
 type UserHandler struct {
@@ -35,15 +35,7 @@ func NewUserHandler(r *gin.Engine, u UserUseCase, log *logrus.Logger, authMiddle
 	r.Use(authMiddleware)
 	r.DELETE("v1/users", handler.Logout)
 	r.GET("v1/users/_current", handler.Current)
-}
-
-func isRequestValid(u interface{}) (bool, error) {
-	validate := validator.New()
-	err := validate.Struct(u)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	r.PUT("v1/users/_current", handler.Update)
 }
 
 func (u *UserHandler) Register(c *gin.Context) {
@@ -59,7 +51,7 @@ func (u *UserHandler) Register(c *gin.Context) {
 		return
 	}
 
-	if ok, errValidation = isRequestValid(&user); !ok {
+	if ok, errValidation = util.IsRequestValid(&user); !ok {
 		u.Log.WithError(errValidation).Error("Error request body validation")
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": errValidation.Error()})
 		return
@@ -93,7 +85,7 @@ func (u *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	if ok, errValidation = isRequestValid(&user); !ok {
+	if ok, errValidation = util.IsRequestValid(&user); !ok {
 		u.Log.WithError(errValidation).Error("Error request body validation")
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": errValidation.Error()})
 		return
@@ -148,7 +140,7 @@ func (u *UserHandler) Current(c *gin.Context) {
 
 	response, err := u.UseCase.Current(c, request)
 	if err != nil {
-		u.Log.WithError(err).Error("Error logging out user")
+		u.Log.WithError(err).Error("Error get data user")
 		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
 		return
 	}
@@ -157,6 +149,43 @@ func (u *UserHandler) Current(c *gin.Context) {
 		Status:     true,
 		StatusCode: http.StatusOK,
 		Message:    "User data retrieved successfully",
+		Data:       response,
+	})
+}
+
+func (u *UserHandler) Update(c *gin.Context) {
+	var (
+		user          domain.UserUpdateRequest
+		errValidation error
+		ok            bool
+	)
+
+	if err := c.ShouldBindJSON(&user); err != nil {
+		u.Log.WithError(err).Error("Error parsing request body")
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": err.Error()})
+		return
+	}
+
+	if ok, errValidation = util.IsRequestValid(&user); !ok {
+		u.Log.WithError(errValidation).Error("Error request body validation")
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": errValidation.Error()})
+		return
+	}
+
+	auth := middleware.GetUser(c)
+	user.ID = auth.ID
+
+	response, err := u.UseCase.Update(c, &user)
+	if err != nil {
+		u.Log.WithError(err).Error("Error update user")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, domain.Response[*domain.UserResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "User updated successfully",
 		Data:       response,
 	})
 }

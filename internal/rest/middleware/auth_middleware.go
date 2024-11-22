@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func NewAuth(userUseCase *usecase.UserUseCase) gin.HandlerFunc {
+func NewAuth(userUseCase *usecase.UserUsecase) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		authHeader := ctx.GetHeader("Authorization")
 		if authHeader == "" {

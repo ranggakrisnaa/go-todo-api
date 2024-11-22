@@ -26,7 +26,6 @@ func init() {
 		log.Fatal("Error loading .env file")
 	}
 	config.RunMigrateDB()
-	middleware.NewRequiredRole()
 }
 
 func main() {

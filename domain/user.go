@@ -27,6 +27,14 @@ type LoginUserRequest struct {
 	Password string    `json:"password" validate:"required,max=100"`
 }
 
+type UserUpdateRequest struct {
+	ID          uint   `json:"id"`
+	Name        string `json:"name,omitempty" validate:"max=100"`
+	Email       string `json:"email,omitempty" validate:"email,max=255"`
+	OldPassword string `json:"old_password,omitempty" validate:"max=100"`
+	NewPassword string `json:"new_password,omitempty" validate:"max=100"`
+}
+
 type GetUserId struct {
 	ID uint `json:"id"`
 }
