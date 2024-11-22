@@ -2,10 +2,13 @@ package rest
 
 import (
 	"context"
+	"fmt"
 	"go-todo-api/domain"
 	"go-todo-api/internal/rest/middleware"
 	"go-todo-api/internal/util"
 	"net/http"
+	"strconv"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -13,6 +16,7 @@ import (
 
 type TodoUseCase interface {
 	Create(ctx context.Context, requests []*domain.TodoCreateRequest) ([]*domain.TodoResponse, error)
+	Update(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error)
 }
 
 type TodoHandler struct {
@@ -39,6 +43,8 @@ func (t *TodoHandler) Create(c *gin.Context) {
 		responses  []*domain.TodoResponse
 		errors     []error
 		bulkInsert = c.Query("bulk") != ""
+		wg         sync.WaitGroup
+		mu         sync.Mutex
 	)
 
 	if bulkInsert {
@@ -56,22 +62,47 @@ func (t *TodoHandler) Create(c *gin.Context) {
 		todos = append(todos, singleTodo)
 	}
 
+	resultChan := make(chan *domain.TodoResponse, len(todos))
+	errChan := make(chan error, len(todos))
+
 	for _, todo := range todos {
-		if ok, err := util.IsRequestValid(&todo); !ok {
-			t.Log.WithError(err).Error("Validation failed for todo")
-			errors = append(errors, err)
-			continue
-		}
+		wg.Add(1)
+		go func(todo domain.TodoCreateRequest) {
+			defer wg.Done()
 
-		todo.UserID = auth.ID
-		response, err := t.UseCase.Create(c, []*domain.TodoCreateRequest{&todo})
-		if err != nil {
-			t.Log.WithError(err).Error("Error creating Todo")
-			errors = append(errors, err)
-			continue
-		}
+			if ok, err := util.IsRequestValid(&todo); !ok {
+				mu.Lock()
+				errors = append(errors, err)
+				mu.Unlock()
+				return
+			}
 
-		responses = append(responses, response[0])
+			todo.UserID = auth.ID
+			response, err := t.UseCase.Create(c, []*domain.TodoCreateRequest{&todo})
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			if len(response) == 0 {
+				errChan <- fmt.Errorf("no response returned for todo: %v", todo)
+				return
+			}
+
+			resultChan <- response[0]
+		}(todo)
+
+	}
+
+	wg.Wait()
+	close(resultChan)
+	close(errChan)
+
+	for response := range resultChan {
+		responses = append(responses, response)
+	}
+	for err := range errChan {
+		errors = append(errors, err)
 	}
 
 	if len(errors) > 0 {
@@ -93,5 +124,104 @@ func (t *TodoHandler) Create(c *gin.Context) {
 }
 
 func (t *TodoHandler) Update(c *gin.Context) {
+	var (
+		singleTodo domain.TodoUpdateRequest
+		todos      []domain.TodoUpdateRequest
+		auth       = middleware.GetUser(c)
+		responses  []*domain.TodoResponse
+		errors     []error
+		bulkUpdate = c.Query("bulk") != ""
+		bookIds    = c.QueryArray("ids")
+		wg         sync.WaitGroup
+		mu         sync.Mutex
+	)
 
+	if bulkUpdate {
+		if err := c.ShouldBindJSON(&todos); err != nil {
+			t.Log.WithError(err).Error("Error parsing request body (bulk mode)")
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "Invalid request body for bulk"})
+			return
+		}
+	} else {
+		if err := c.ShouldBindJSON(&singleTodo); err != nil {
+			t.Log.WithError(err).Error("Error parsing request body (single mode)")
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "Invalid request body"})
+			return
+		}
+		todos = append(todos, singleTodo)
+	}
+
+	if len(todos) != len(bookIds) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "Mismatched number of IDs and Todo items"})
+		return
+	}
+
+	resultChan := make(chan *domain.TodoResponse, len(todos)*len(bookIds))
+	errChan := make(chan error, len(todos)*len(bookIds))
+
+	for i := range todos {
+		wg.Add(1)
+		go func(todo domain.TodoUpdateRequest, bookIdStr string) {
+			defer wg.Done()
+
+			if ok, err := util.IsRequestValid(&todo); !ok {
+				mu.Lock()
+				errors = append(errors, err)
+				mu.Unlock()
+				return
+			}
+
+			bookId, err := strconv.ParseUint(bookIdStr, 10, 64)
+			if err != nil {
+				t.Log.WithError(err).Errorf("Invalid book ID: %s", bookIdStr)
+				errChan <- fmt.Errorf("invalid book ID: %s", bookIdStr)
+				return
+			}
+
+			todo.ID = uint(bookId)
+			todo.UserID = auth.ID
+
+			response, err := t.UseCase.Update(c, []*domain.TodoUpdateRequest{&todo})
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			if len(response) == 0 {
+				errChan <- fmt.Errorf("no response returned for todo: %v", todo)
+				return
+			}
+
+			resultChan <- response[0]
+		}(todos[i], bookIds[i])
+
+	}
+
+	wg.Wait()
+	close(resultChan)
+	close(errChan)
+
+	for response := range resultChan {
+		responses = append(responses, response)
+	}
+	for err := range errChan {
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		c.JSON(http.StatusMultiStatus, gin.H{
+			"status":  false,
+			"message": "Some todos failed to process",
+			"data":    responses,
+			"errors":  errors,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, domain.Response[[]*domain.TodoResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "Todos updated successfully",
+		Data:       responses,
+	})
 }

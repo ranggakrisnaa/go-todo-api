@@ -25,6 +25,12 @@ type TodoCreateRequest struct {
 	DueTime     time.Time `json:"due_time" validate:"required"`
 }
 
-type TodoInput struct {
-	Todos []TodoCreateRequest `json:"todos"`
+type TodoUpdateRequest struct {
+	ID          uint      `json:"id"`
+	UUID        uuid.UUID `json:"uuid"`
+	UserID      uint      `json:"user_id"`
+	Title       string    `json:"title,omitempty" validate:"max=255"`
+	Description string    `json:"description,omitempty"`
+	IsCompleted bool      `json:"is_completed,omitempty"`
+	DueTime     time.Time `json:"due_time,omitempty"`
 }
