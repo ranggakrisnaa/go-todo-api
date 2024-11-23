@@ -22,6 +22,7 @@ type TodoRepository interface {
 	FindAll(ctx context.Context) (*[]entity.Todo, error)
 	FindAllWithPagination(ctx context.Context, offset, limit int) (*[]entity.Todo, error)
 	Count(ctx context.Context, query string, args ...any) (int64, error)
+	CreateTodoTag(ctx context.Context, todoTag *entity.TodoTag) error
 }
 
 type TodoUsecase struct {
@@ -60,15 +61,20 @@ func (t *TodoUsecase) Create(ctx context.Context, requests []*domain.TodoCreateR
 			return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 		}
 
-		todos = append(todos, &domain.TodoResponse{
-			UUID:        todo.UUID,
-			Title:       todo.Title,
-			Description: todo.Description,
-			IsCompleted: todo.IsCompleted,
-			DueTime:     todo.DueTime,
-			CreatedAt:   todo.CreatedAt,
-			UpdatedAt:   todo.UpdatedAt,
-		})
+		for _, tagID := range request.TagID {
+			todoTag := &entity.TodoTag{
+				TodoID: todo.ID,
+				TagID:  uint(tagID),
+			}
+
+			if err := t.TodoRepo.CreateTodoTag(tx.Statement.Context, todoTag); err != nil {
+				t.Log.WithError(err).Error("Failed to create todo_tag")
+				tx.Rollback()
+				return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+			}
+		}
+
+		todos = append(todos, converter.TodoToResponse(&todo))
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -108,15 +114,7 @@ func (t *TodoUsecase) Update(ctx context.Context, requests []*domain.TodoUpdateR
 			return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 		}
 
-		todos = append(todos, &domain.TodoResponse{
-			UUID:        todo.UUID,
-			Title:       todo.Title,
-			Description: todo.Description,
-			IsCompleted: todo.IsCompleted,
-			DueTime:     todo.DueTime,
-			CreatedAt:   todo.CreatedAt,
-			UpdatedAt:   todo.UpdatedAt,
-		})
+		todos = append(todos, converter.TodoToResponse(todo))
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -196,11 +194,3 @@ func (t *TodoUsecase) FindTodoByID(ctx context.Context, request *domain.TodoGetD
 
 	return converter.TodoToResponse(todo), nil
 }
-
-// func (t *TodoUsecase) FindTodoByID(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error) {
-// 	todo, err := t.TodoRepo.FindByID(tx.Statement.Context, request.ID)
-// 	if err != nil {
-// 		t.Log.WithError(err).Error("Failed to found todo")
-// 		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
-// 	}
-// }

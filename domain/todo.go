@@ -20,6 +20,7 @@ type TodoCreateRequest struct {
 	UUID        uuid.UUID `json:"uuid"`
 	UserID      uint      `json:"user_id"`
 	Title       string    `json:"title" validate:"required,max=255"`
+	TagID       []int     `json:"tag_id"`
 	Description string    `json:"description"  validate:"required"`
 	IsCompleted bool      `json:"is_completed"`
 	DueTime     time.Time `json:"due_time" validate:"required"`

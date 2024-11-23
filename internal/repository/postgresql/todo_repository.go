@@ -21,11 +21,16 @@ func NewTodoRepository(db *gorm.DB) *TodoRepository {
 
 func (r *TodoRepository) FindAll(ctx context.Context) (*[]entity.Todo, error) {
 	var todos []entity.Todo
-
 	err := r.DB.WithContext(ctx).Find(&todos).Error
 	if err != nil {
 		return nil, err
 	}
-
 	return &todos, nil
+}
+
+func (r *TodoRepository) CreateTodoTag(ctx context.Context, todoTag *entity.TodoTag) error {
+	if err := r.DB.WithContext(ctx).Create(&todoTag).Error; err != nil {
+		return err
+	}
+	return nil
 }

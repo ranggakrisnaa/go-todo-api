@@ -29,4 +29,8 @@ func Bootstrap(config *BootstrapConfig) {
 	todoUsecase := usecase.NewTodoUseCase(todoRepo, config.DB, config.Log, config.JwtService)
 	rest.NewTodoHandler(config.Route, todoUsecase, config.Log)
 
+	tagRepo := postgresql.NewTagRepository(config.DB)
+	tagUsecase := usecase.NewTagUsecase(tagRepo, config.DB, config.Log, config.JwtService)
+	rest.NewTagHandler(config.Route, tagUsecase, config.Log)
+
 }
