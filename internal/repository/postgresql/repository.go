@@ -23,7 +23,7 @@ func (r *BaseRepository[T]) Update(ctx context.Context, entity *T) error {
 }
 
 func (r *BaseRepository[T]) Delete(ctx context.Context, entity *T) error {
-	return r.DB.WithContext(ctx).Delete(entity).Error
+	return r.DB.WithContext(ctx).Unscoped().Delete(entity).Error
 }
 
 func (r *BaseRepository[T]) FindByID(ctx context.Context, id any) (*T, error) {

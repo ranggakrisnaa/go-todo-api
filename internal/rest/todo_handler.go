@@ -25,6 +25,7 @@ func (e *TodoError) Error() string {
 type TodoUseCase interface {
 	Create(ctx context.Context, requests []*domain.TodoCreateRequest) ([]*domain.TodoResponse, error)
 	Update(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error)
+	Delete(ctx context.Context, request *domain.TodoDeleteRequest) ([]*domain.TodoResponse, error)
 }
 
 type TodoHandler struct {
@@ -41,6 +42,7 @@ func NewTodoHandler(r *gin.Engine, t TodoUseCase, log *logrus.Logger) {
 	requiredRole := middleware.NewRequiredRole()
 	r.POST("v1/todos", requiredRole.RoleCheck(), handler.Create)
 	r.PUT("v1/todos/:id", requiredRole.RoleCheck(), handler.Update)
+	r.DELETE("v1/todos/:id", requiredRole.RoleCheck(), handler.Delete)
 }
 
 func (t *TodoHandler) Create(c *gin.Context) {
@@ -150,8 +152,8 @@ func (t *TodoHandler) Update(c *gin.Context) {
 		responses   []*domain.TodoResponse
 		errors      []error
 		bulkUpdate  = c.Query("bulk") != ""
-		bookIdParam = c.Param("id")
-		bookIds     = c.QueryArray("ids")
+		todoIdParam = c.Param("id")
+		todoIds     = c.QueryArray("ids")
 		wg          sync.WaitGroup
 		mu          sync.Mutex
 	)
@@ -171,29 +173,29 @@ func (t *TodoHandler) Update(c *gin.Context) {
 		todos = append(todos, singleTodo)
 	}
 
-	if len(bookIds) > 0 && len(bookIds) != len(todos) {
+	if len(todoIds) > 0 && len(todoIds) != len(todos) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "Mismatched number of IDs and Todo items"})
 		return
 	}
 
-	if len(bookIds) == 0 && bookIdParam == "" {
+	if len(todoIds) == 0 && todoIdParam == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "No IDs provided for update"})
 		return
 	}
 
-	if len(bookIds) == 0 && bookIdParam != "" {
-		bookIds = make([]string, len(todos))
+	if len(todoIds) == 0 && todoIdParam != "" {
+		todoIds = make([]string, len(todos))
 		for i := range todos {
-			bookIds[i] = bookIdParam
+			todoIds[i] = todoIdParam
 		}
 	}
 
-	resultChan := make(chan *domain.TodoResponse, len(todos)*len(bookIds))
-	errChan := make(chan error, len(todos)*len(bookIds))
+	resultChan := make(chan *domain.TodoResponse, len(todos)*len(todoIds))
+	errChan := make(chan error, len(todos)*len(todoIds))
 
 	for i := range todos {
 		wg.Add(1)
-		go func(todo domain.TodoUpdateRequest, bookIdStr string) {
+		go func(todo domain.TodoUpdateRequest, todoIdStr string) {
 			defer wg.Done()
 
 			if ok, err := util.IsRequestValid(&todo); !ok {
@@ -203,14 +205,14 @@ func (t *TodoHandler) Update(c *gin.Context) {
 				return
 			}
 
-			bookId, err := strconv.ParseUint(bookIdStr, 10, 64)
+			todoId, err := strconv.ParseUint(todoIdStr, 10, 64)
 			if err != nil {
-				t.Log.WithError(err).Errorf("Invalid book ID: %s", bookIdStr)
-				errChan <- fmt.Errorf("invalid book ID: %s", bookIdStr)
+				t.Log.WithError(err).Errorf("Invalid todo ID: %s", todoIdStr)
+				errChan <- fmt.Errorf("invalid todo ID: %s", todoIdStr)
 				return
 			}
 
-			todo.ID = uint(bookId)
+			todo.ID = uint(todoId)
 			todo.UserID = auth.ID
 
 			response, err := t.UseCase.Update(c, []*domain.TodoUpdateRequest{&todo})
@@ -225,7 +227,7 @@ func (t *TodoHandler) Update(c *gin.Context) {
 			}
 
 			resultChan <- response[0]
-		}(todos[i], bookIds[i])
+		}(todos[i], todoIds[i])
 
 	}
 
@@ -265,6 +267,100 @@ func (t *TodoHandler) Update(c *gin.Context) {
 		Status:     true,
 		StatusCode: http.StatusOK,
 		Message:    "Todos updated successfully",
+		Data:       responses,
+	})
+}
+
+func (t *TodoHandler) Delete(c *gin.Context) {
+	var (
+		responses   []*domain.TodoResponse
+		errors      []error
+		todoIdParam = c.Param("id")
+		todoIds     = c.QueryArray("ids")
+		wg          sync.WaitGroup
+	)
+
+	if len(todoIds) == 0 && todoIdParam == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "No IDs provided for delete"})
+		return
+	}
+
+	if len(todoIds) == 0 && todoIdParam != "" {
+		todoIds = make([]string, len(todoIds))
+		for i := range todoIds {
+			todoIds[i] = todoIdParam
+		}
+	}
+
+	resultChan := make(chan *domain.TodoResponse, len(todoIds))
+	errChan := make(chan error, len(todoIds))
+
+	for i := range todoIds {
+		wg.Add(1)
+		go func(todoIdStr string) {
+			defer wg.Done()
+
+			todoId, err := strconv.ParseUint(todoIdStr, 10, 64)
+			if err != nil {
+				t.Log.WithError(err).Errorf("Invalid todo ID: %s", todoIdStr)
+				errChan <- fmt.Errorf("invalid todo ID: %s", todoIdStr)
+				return
+			}
+
+			todo := &domain.TodoDeleteRequest{ID: uint(todoId)}
+			response, err := t.UseCase.Delete(c, todo)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			if len(response) == 0 {
+				errChan <- fmt.Errorf("no response returned for todo: %v", todoId)
+				return
+			}
+
+			resultChan <- response[0]
+
+		}(todoIds[i])
+
+	}
+
+	wg.Wait()
+	close(resultChan)
+	close(errChan)
+
+	for response := range resultChan {
+		responses = append(responses, response)
+	}
+	for err := range errChan {
+		if err != nil {
+			errors = append(errors, err)
+		}
+	}
+
+	if len(errors) > 0 {
+		var errorResponses []map[string]string
+		for _, err := range errors {
+			if todoErr, ok := err.(*TodoError); ok {
+				errorResponses = append(errorResponses, map[string]string{"message": todoErr.Message})
+			} else {
+				errorResponses = append(errorResponses, map[string]string{"message": err.Error()})
+			}
+		}
+
+		c.JSON(http.StatusMultiStatus, gin.H{
+			"status":  true,
+			"message": "Some todos failed to process",
+			"data":    responses,
+			"errors":  errorResponses,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, domain.Response[[]*domain.TodoResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "Todos deleted successfully",
 		Data:       responses,
 	})
 }

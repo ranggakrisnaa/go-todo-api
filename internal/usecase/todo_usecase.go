@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"go-todo-api/domain"
 	"go-todo-api/internal/config"
 	"go-todo-api/internal/entity"
@@ -15,6 +16,7 @@ type TodoRepository interface {
 	Create(ctx context.Context, todo *entity.Todo) error
 	FindByID(ctx context.Context, id any) (*entity.Todo, error)
 	Update(ctx context.Context, todo *entity.Todo) error
+	Delete(ctx context.Context, todo *entity.Todo) error
 }
 
 type TodoUsecase struct {
@@ -35,7 +37,6 @@ func NewTodoUseCase(t TodoRepository, db *gorm.DB, logger *logrus.Logger, jwtSer
 
 func (t *TodoUsecase) Create(ctx context.Context, requests []*domain.TodoCreateRequest) ([]*domain.TodoResponse, error) {
 	tx := t.DB.WithContext(ctx).Begin()
-
 	var todos []*domain.TodoResponse
 
 	for _, request := range requests {
@@ -74,13 +75,13 @@ func (t *TodoUsecase) Create(ctx context.Context, requests []*domain.TodoCreateR
 
 func (t *TodoUsecase) Update(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error) {
 	tx := t.DB.WithContext(ctx).Begin()
-
 	var todos []*domain.TodoResponse
 
 	for _, request := range requests {
 		todo, err := t.TodoRepo.FindByID(tx.Statement.Context, request.ID)
 		if err != nil {
-
+			t.Log.WithError(err).Error("Failed to found todo")
+			return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 		}
 
 		if request.Title != "" {
@@ -116,4 +117,35 @@ func (t *TodoUsecase) Update(ctx context.Context, requests []*domain.TodoUpdateR
 	}
 
 	return todos, nil
+}
+
+func (t *TodoUsecase) Delete(ctx context.Context, request *domain.TodoDeleteRequest) ([]*domain.TodoResponse, error) {
+	tx := t.DB.WithContext(ctx).Begin()
+	var (
+		deletedTodos []*domain.TodoResponse
+	)
+
+	todo, err := t.TodoRepo.FindByID(tx.Statement.Context, request.ID)
+	if err != nil {
+		t.Log.WithError(err).Error("Failed to found todo")
+		return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+	}
+
+	err = t.TodoRepo.Delete(ctx, todo)
+	if err != nil {
+		t.Log.WithError(err).Error("Error deleting todo")
+		return nil, fmt.Errorf("failed to delete todo: %w", err)
+	}
+
+	deletedTodos = append(deletedTodos, &domain.TodoResponse{
+		UUID:        todo.UUID,
+		Title:       todo.Title,
+		Description: todo.Description,
+		IsCompleted: todo.IsCompleted,
+		DueTime:     todo.DueTime,
+		CreatedAt:   todo.CreatedAt,
+		UpdatedAt:   todo.UpdatedAt,
+	})
+
+	return deletedTodos, nil
 }

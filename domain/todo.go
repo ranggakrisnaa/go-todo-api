@@ -34,3 +34,7 @@ type TodoUpdateRequest struct {
 	IsCompleted bool      `json:"is_completed,omitempty"`
 	DueTime     time.Time `json:"due_time,omitempty"`
 }
+
+type TodoDeleteRequest struct {
+	ID uint `json:"id"`
+}

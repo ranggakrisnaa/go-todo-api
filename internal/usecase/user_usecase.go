@@ -112,8 +112,8 @@ func (u *UserUsecase) Login(ctx context.Context, request *domain.LoginUserReques
 func (u *UserUsecase) GetUserID(ctx context.Context, request *domain.GetUserId) (*entity.User, error) {
 	user, err := u.UserRepo.FindByID(ctx, request.ID)
 	if err != nil {
-		u.Log.WithError(err).Error("Failed to find user by UUID")
-		return nil, util.NewCustomError(int(util.ErrNotFoundCode), "User not found")
+		u.Log.WithError(err).Error("Failed to find user by id")
+		return nil, util.NewCustomError(int(util.ErrNotFoundCode), err.Error())
 	}
 
 	return user, nil
