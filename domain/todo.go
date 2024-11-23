@@ -8,10 +8,10 @@ import (
 
 type TodoResponse struct {
 	UUID        uuid.UUID `json:"uuid"`
-	Title       string    `json:"title" validate:"required,max=255"`
-	Description string    `json:"description"  validate:"required"`
-	IsCompleted bool      `json:"is_completed" validate:"required"`
-	DueTime     time.Time `json:"due_time" validate:"required"`
+	Title       string    `json:"title,omitempty" validate:"required,max=255"`
+	Description string    `json:"description,omitempty"  validate:"required"`
+	IsCompleted bool      `json:"is_completed,omitempty" validate:"required"`
+	DueTime     time.Time `json:"due_time,omitempty" validate:"required"`
 	CreatedAt   time.Time `json:"created_at,omitempty"`
 	UpdatedAt   time.Time `json:"updated_at,omitempty"`
 }
@@ -33,6 +33,10 @@ type TodoUpdateRequest struct {
 	Description string    `json:"description,omitempty"`
 	IsCompleted bool      `json:"is_completed,omitempty"`
 	DueTime     time.Time `json:"due_time,omitempty"`
+}
+
+type TodoGetDataRequest struct {
+	ID uint `json:"id"`
 }
 
 type TodoDeleteRequest struct {

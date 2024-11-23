@@ -26,6 +26,8 @@ type TodoUseCase interface {
 	Create(ctx context.Context, requests []*domain.TodoCreateRequest) ([]*domain.TodoResponse, error)
 	Update(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error)
 	Delete(ctx context.Context, request *domain.TodoDeleteRequest) ([]*domain.TodoResponse, error)
+	FindAllTodo(ctx context.Context, page, size int) ([]*domain.TodoResponse, *domain.PaginationMeta, error)
+	FindTodoByID(ctx context.Context, request *domain.TodoGetDataRequest) (*domain.TodoResponse, error)
 }
 
 type TodoHandler struct {
@@ -41,6 +43,8 @@ func NewTodoHandler(r *gin.Engine, t TodoUseCase, log *logrus.Logger) {
 
 	requiredRole := middleware.NewRequiredRole()
 	r.POST("v1/todos", requiredRole.RoleCheck(), handler.Create)
+	r.GET("v1/todos", handler.FindAllTodo)
+	r.GET("v1/todos/:id", handler.FindTodoById)
 	r.PUT("v1/todos/:id", requiredRole.RoleCheck(), handler.Update)
 	r.DELETE("v1/todos/:id", requiredRole.RoleCheck(), handler.Delete)
 }
@@ -286,16 +290,13 @@ func (t *TodoHandler) Delete(c *gin.Context) {
 	}
 
 	if len(todoIds) == 0 && todoIdParam != "" {
-		todoIds = make([]string, len(todoIds))
-		for i := range todoIds {
-			todoIds[i] = todoIdParam
-		}
+		todoIds = append(todoIds, todoIdParam)
 	}
 
 	resultChan := make(chan *domain.TodoResponse, len(todoIds))
 	errChan := make(chan error, len(todoIds))
 
-	for i := range todoIds {
+	for _, todoIdStr := range todoIds {
 		wg.Add(1)
 		go func(todoIdStr string) {
 			defer wg.Done()
@@ -320,9 +321,7 @@ func (t *TodoHandler) Delete(c *gin.Context) {
 			}
 
 			resultChan <- response[0]
-
-		}(todoIds[i])
-
+		}(todoIdStr)
 	}
 
 	wg.Wait()
@@ -362,5 +361,59 @@ func (t *TodoHandler) Delete(c *gin.Context) {
 		StatusCode: http.StatusOK,
 		Message:    "Todos deleted successfully",
 		Data:       responses,
+	})
+}
+
+func (t *TodoHandler) FindAllTodo(c *gin.Context) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil {
+		t.Log.WithError(err).Warn("Invalid parsing data")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+	size, err := strconv.Atoi(c.DefaultQuery("size", "10"))
+	if err != nil {
+		t.Log.WithError(err).Warn("Invalid parsing data")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+
+	responses, meta, err := t.UseCase.FindAllTodo(c, page, size)
+	if err != nil {
+		t.Log.WithError(err).Error("Error find todo")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, domain.Response[[]*domain.TodoResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "Todos data retrieved successfully",
+		Data:       responses,
+		Meta:       meta,
+	})
+}
+
+func (t *TodoHandler) FindTodoById(c *gin.Context) {
+	todoId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		t.Log.WithError(err).Warn("Invalid parsing data")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+
+	todo := &domain.TodoGetDataRequest{ID: uint(todoId)}
+	response, err := t.UseCase.FindTodoByID(c, todo)
+	if err != nil {
+		t.Log.WithError(err).Error("Error finding todo")
+		c.AbortWithStatusJSON(util.GetStatusCode(err), gin.H{"errors": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, domain.Response[*domain.TodoResponse]{
+		Status:     true,
+		StatusCode: http.StatusOK,
+		Message:    "Todo data retrieved successfully",
+		Data:       response,
 	})
 }

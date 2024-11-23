@@ -23,7 +23,7 @@ func (r *BaseRepository[T]) Update(ctx context.Context, entity *T) error {
 }
 
 func (r *BaseRepository[T]) Delete(ctx context.Context, entity *T) error {
-	return r.DB.WithContext(ctx).Unscoped().Delete(entity).Error
+	return r.DB.WithContext(ctx).Delete(entity).Error
 }
 
 func (r *BaseRepository[T]) FindByID(ctx context.Context, id any) (*T, error) {
@@ -43,4 +43,13 @@ func (r *BaseRepository[T]) Count(ctx context.Context, query string, args ...any
 		Where(query, args...).
 		Count(&count).Error
 	return count, err
+}
+
+func (r *BaseRepository[T]) FindAllWithPagination(ctx context.Context, offset, limit int) (*[]T, error) {
+	var entities []T
+	err := r.DB.WithContext(ctx).Offset(offset).Limit(limit).Find(&entities).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entities, nil
 }
