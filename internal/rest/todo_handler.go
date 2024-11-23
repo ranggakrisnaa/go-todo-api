@@ -14,6 +14,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type TodoError struct {
+	Message string `json:"message"`
+}
+
+func (e *TodoError) Error() string {
+	return e.Message
+}
+
 type TodoUseCase interface {
 	Create(ctx context.Context, requests []*domain.TodoCreateRequest) ([]*domain.TodoResponse, error)
 	Update(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error)
@@ -50,13 +58,13 @@ func (t *TodoHandler) Create(c *gin.Context) {
 	if bulkInsert {
 		if err := c.ShouldBindJSON(&todos); err != nil {
 			t.Log.WithError(err).Error("Error parsing request body (bulk mode)")
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "Invalid request body for bulk"})
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": err.Error()})
 			return
 		}
 	} else {
 		if err := c.ShouldBindJSON(&singleTodo); err != nil {
 			t.Log.WithError(err).Error("Error parsing request body (single mode)")
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "Invalid request body"})
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": err.Error()})
 			return
 		}
 		todos = append(todos, singleTodo)
@@ -102,15 +110,26 @@ func (t *TodoHandler) Create(c *gin.Context) {
 		responses = append(responses, response)
 	}
 	for err := range errChan {
-		errors = append(errors, err)
+		if err != nil {
+			errors = append(errors, err)
+		}
 	}
 
 	if len(errors) > 0 {
+		var errorResponses []map[string]string
+		for _, err := range errors {
+			if todoErr, ok := err.(*TodoError); ok {
+				errorResponses = append(errorResponses, map[string]string{"message": todoErr.Message})
+			} else {
+				errorResponses = append(errorResponses, map[string]string{"message": err.Error()})
+			}
+		}
+
 		c.JSON(http.StatusMultiStatus, gin.H{
 			"status":  true,
 			"message": "Some todos failed to process",
 			"data":    responses,
-			"errors":  errors,
+			"errors":  errorResponses,
 		})
 		return
 	}
@@ -125,15 +144,16 @@ func (t *TodoHandler) Create(c *gin.Context) {
 
 func (t *TodoHandler) Update(c *gin.Context) {
 	var (
-		singleTodo domain.TodoUpdateRequest
-		todos      []domain.TodoUpdateRequest
-		auth       = middleware.GetUser(c)
-		responses  []*domain.TodoResponse
-		errors     []error
-		bulkUpdate = c.Query("bulk") != ""
-		bookIds    = c.QueryArray("ids")
-		wg         sync.WaitGroup
-		mu         sync.Mutex
+		singleTodo  domain.TodoUpdateRequest
+		todos       []domain.TodoUpdateRequest
+		auth        = middleware.GetUser(c)
+		responses   []*domain.TodoResponse
+		errors      []error
+		bulkUpdate  = c.Query("bulk") != ""
+		bookIdParam = c.Param("id")
+		bookIds     = c.QueryArray("ids")
+		wg          sync.WaitGroup
+		mu          sync.Mutex
 	)
 
 	if bulkUpdate {
@@ -151,9 +171,21 @@ func (t *TodoHandler) Update(c *gin.Context) {
 		todos = append(todos, singleTodo)
 	}
 
-	if len(todos) != len(bookIds) {
+	if len(bookIds) > 0 && len(bookIds) != len(todos) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "Mismatched number of IDs and Todo items"})
 		return
+	}
+
+	if len(bookIds) == 0 && bookIdParam == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"errors": "No IDs provided for update"})
+		return
+	}
+
+	if len(bookIds) == 0 && bookIdParam != "" {
+		bookIds = make([]string, len(todos))
+		for i := range todos {
+			bookIds[i] = bookIdParam
+		}
 	}
 
 	resultChan := make(chan *domain.TodoResponse, len(todos)*len(bookIds))
@@ -205,15 +237,26 @@ func (t *TodoHandler) Update(c *gin.Context) {
 		responses = append(responses, response)
 	}
 	for err := range errChan {
-		errors = append(errors, err)
+		if err != nil {
+			errors = append(errors, err)
+		}
 	}
 
 	if len(errors) > 0 {
+		var errorResponses []map[string]string
+		for _, err := range errors {
+			if todoErr, ok := err.(*TodoError); ok {
+				errorResponses = append(errorResponses, map[string]string{"message": todoErr.Message})
+			} else {
+				errorResponses = append(errorResponses, map[string]string{"message": err.Error()})
+			}
+		}
+
 		c.JSON(http.StatusMultiStatus, gin.H{
-			"status":  false,
+			"status":  true,
 			"message": "Some todos failed to process",
 			"data":    responses,
-			"errors":  errors,
+			"errors":  errorResponses,
 		})
 		return
 	}
