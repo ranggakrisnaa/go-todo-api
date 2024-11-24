@@ -19,10 +19,13 @@ type TodoRepository interface {
 	FindByID(ctx context.Context, id any) (*entity.Todo, error)
 	Update(ctx context.Context, todo *entity.Todo) error
 	Delete(ctx context.Context, todo *entity.Todo) error
-	FindAll(ctx context.Context) (*[]entity.Todo, error)
+	FindAll(ctx context.Context, offset, limit int) (*[]entity.Todo, error)
 	FindAllWithPagination(ctx context.Context, offset, limit int) (*[]entity.Todo, error)
 	Count(ctx context.Context, query string, args ...any) (int64, error)
 	CreateTodoTag(ctx context.Context, todoTag *entity.TodoTag) error
+	FindTodoTagByTodoID(ctx context.Context, todoID uint) ([]entity.TodoTag, error)
+	DeleteTodoTag(ctx context.Context, todoTags []entity.TodoTag) error
+	FindTodoTagByTagID(ctx context.Context, tagID uint) ([]entity.TodoTag, error)
 }
 
 type TodoUsecase struct {
@@ -62,12 +65,22 @@ func (t *TodoUsecase) Create(ctx context.Context, requests []*domain.TodoCreateR
 		}
 
 		for _, tagID := range request.TagID {
-			todoTag := &entity.TodoTag{
+			todoTag, err := t.TodoRepo.FindTodoTagByTagID(tx.Statement.Context, uint(tagID))
+			if err != nil {
+				t.Log.WithError(err).Error("Failed to check existing todo_tag")
+				return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+			}
+
+			if todoTag != nil {
+				continue
+			}
+
+			newTodoTag := &entity.TodoTag{
 				TodoID: todo.ID,
 				TagID:  uint(tagID),
 			}
 
-			if err := t.TodoRepo.CreateTodoTag(tx.Statement.Context, todoTag); err != nil {
+			if err := t.TodoRepo.CreateTodoTag(tx.Statement.Context, newTodoTag); err != nil {
 				t.Log.WithError(err).Error("Failed to create todo_tag")
 				tx.Rollback()
 				return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
@@ -114,6 +127,46 @@ func (t *TodoUsecase) Update(ctx context.Context, requests []*domain.TodoUpdateR
 			return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 		}
 
+		if len(request.TagID) > 0 {
+			existingTags, err := t.TodoRepo.FindTodoTagByTodoID(tx.Statement.Context, todo.ID)
+			if err != nil {
+				t.Log.WithError(err).Error("Failed to find todo_tags")
+				tx.Rollback()
+				return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+			}
+
+			if len(existingTags) > 0 {
+				if err := t.TodoRepo.DeleteTodoTag(tx.Statement.Context, existingTags); err != nil {
+					t.Log.WithError(err).Error("Failed to delete todo_tags")
+					tx.Rollback()
+					return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+				}
+			}
+
+			for _, tagID := range request.TagID {
+				todoTag, err := t.TodoRepo.FindTodoTagByTagID(tx.Statement.Context, uint(tagID))
+				if err != nil {
+					t.Log.WithError(err).Error("Failed to check existing todo_tag")
+					return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+				}
+
+				if todoTag != nil {
+					continue
+				}
+
+				newTodoTag := &entity.TodoTag{
+					TodoID: todo.ID,
+					TagID:  uint(tagID),
+				}
+
+				if err := t.TodoRepo.CreateTodoTag(tx.Statement.Context, newTodoTag); err != nil {
+					t.Log.WithError(err).Error("Failed to create todo_tag")
+					tx.Rollback()
+					return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
+				}
+			}
+		}
+
 		todos = append(todos, converter.TodoToResponse(todo))
 	}
 
@@ -155,7 +208,7 @@ func (t *TodoUsecase) FindAllTodo(ctx context.Context, page, size int) ([]*domai
 		todoResponses []*domain.TodoResponse
 	)
 
-	todosFromRepo, err := t.TodoRepo.FindAllWithPagination(ctx, page, size)
+	todosFromRepo, err := t.TodoRepo.FindAll(ctx, page, size)
 	if err != nil {
 		t.Log.WithError(err).Error("Failed to find todos")
 		return nil, nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())

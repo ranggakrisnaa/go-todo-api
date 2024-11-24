@@ -9,14 +9,12 @@ import (
 
 type TodoTag struct {
 	ID        uint           `gorm:"column:id;primaryKey"`
-	UUID      uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid()" json:"uuid"`
-	TodoID    uint           `gorm:"not null" json:"todo_id" validate:"required"`
-	TagID     uint           `gorm:"not null" json:"tag_id"`
+	UUID      uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid()"`
+	TodoID    uint           `gorm:"not null"`
+	TagID     uint           `gorm:"not null"`
 	CreatedAt time.Time      `gorm:"column:created_at;autoCreateTime:milli"`
 	UpdatedAt time.Time      `gorm:"column:updated_at;autoCreateTime:milli;autoUpdateTime:milli"`
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;autoDeleteTime:milli"`
-	Tag       Tag            `gorm:"foreignKey:tag_id;references:id"`
-	Todo      Todo           `gorm:"foreignKey:todo_id;references:id"`
 }
 
 func (t *TodoTag) TableName() string {

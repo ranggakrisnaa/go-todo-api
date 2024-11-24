@@ -14,7 +14,7 @@ type Tag struct {
 	CreatedAt time.Time      `gorm:"column:created_at;autoCreateTime:milli"`
 	UpdatedAt time.Time      `gorm:"column:updated_at;autoCreateTime:milli;autoUpdateTime:milli"`
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;autoDeleteTime:milli"`
-	TodoTag   []TodoTag      `gorm:"foreignKey:tag_id;references:id"`
+	Todo      []Todo         `gorm:"many2many:todo_tags;foreignKey:ID;joinForeignKey:TagID;References:ID;joinReferences:TodoID"`
 }
 
 func (t *Tag) TableName() string {

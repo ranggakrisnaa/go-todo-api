@@ -19,7 +19,7 @@ type Todo struct {
 	UpdatedAt   time.Time      `gorm:"column:updated_at;autoCreateTime:milli;autoUpdateTime:milli"`
 	DeletedAt   gorm.DeletedAt `gorm:"column:deleted_at;autoDeleteTime:milli"`
 	User        User           `gorm:"foreignKey:user_id;references:id"`
-	TodoTag     []TodoTag      `gorm:"foreignKey:todo_id;references:id"`
+	Tag         []Tag          `gorm:"many2many:todo_tags;foreignKey:ID;joinForeignKey:TodoID;References:ID;joinReferences:TagID"`
 }
 
 func (t *Todo) TableName() string {
