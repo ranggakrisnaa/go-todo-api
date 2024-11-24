@@ -123,7 +123,7 @@ func (t *TodoUsecase) Update(ctx context.Context, requests []*domain.TodoUpdateR
 		todo.DueTime = request.DueTime
 
 		if err := t.TodoRepo.Update(tx.Statement.Context, todo); err != nil {
-			t.Log.WithError(err).Error("Failed to create user")
+			t.Log.WithError(err).Error("Failed to update todo")
 			return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 		}
 

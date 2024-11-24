@@ -18,7 +18,12 @@ type TagCreateRequest struct {
 }
 
 type TagUpdateRequest struct {
+	ID   uint   `json:"id"`
 	Name string `json:"name,omitempty" validate:"max=255"`
+}
+
+type TagDeleteRequest struct {
+	ID uint `json:"id"`
 }
 
 type TagGetDataRequest struct {
