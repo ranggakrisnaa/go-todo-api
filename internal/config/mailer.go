@@ -10,15 +10,20 @@ import (
 )
 
 type MailerConfig struct {
-	SmtpHost       string
-	SmtpPort       int
-	SenderMailName string
+	SmtpHost         string
+	SmtpPort         int
+	SenderMailName   string
+	SmtpAuthEmail    string
+	SmtpAuthPassword string
 }
 
 func NewMailerConfig() (*MailerConfig, error) {
 	smtpHost := os.Getenv("CONFIG_SMTP_HOST")
 	smtpPortStr := os.Getenv("CONFIG_SMTP_PORT")
-	if smtpHost == "" && smtpPortStr == "" {
+	senderName := os.Getenv("CONFIG_SMTP_SENDER")
+	smtpAuthEmail := os.Getenv("CONFIG_AUTH_EMAIL")
+	smtpAuthPassword := os.Getenv("CONFIG_AUTH_PASSWORD")
+	if smtpHost == "" || smtpPortStr == "" || smtpAuthEmail == "" || smtpAuthPassword == "" {
 		return nil, errors.New("SMTP configuration is missing")
 	}
 	smtpPort, err := strconv.Atoi(smtpPortStr)
@@ -27,22 +32,30 @@ func NewMailerConfig() (*MailerConfig, error) {
 	}
 
 	return &MailerConfig{
-		SmtpHost: smtpHost,
-		SmtpPort: smtpPort,
+		SmtpHost:         smtpHost,
+		SmtpPort:         smtpPort,
+		SenderMailName:   senderName,
+		SmtpAuthEmail:    smtpAuthEmail,
+		SmtpAuthPassword: smtpAuthPassword,
 	}, nil
 }
 
-func (c *MailerConfig) SendMail(to []string, subject, message string) error {
+func (c *MailerConfig) SendMail(to string, subject, message string) error {
 	m := gomail.NewMessage()
 
 	m.SetHeader("From", c.SenderMailName)
-	m.SetHeader("To", to...)
-	m.SetHeader("Subject", "OTP Code Verification")
-	m.SetBody("text/plain", message)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/html", message)
 
-	d := &gomail.Dialer{Host: c.SmtpHost, Port: c.SmtpPort}
+	dialer := gomail.NewDialer(
+		c.SmtpHost,
+		c.SmtpPort,
+		c.SmtpAuthEmail,
+		c.SmtpAuthPassword,
+	)
 
-	errDial := d.DialAndSend(m)
+	errDial := dialer.DialAndSend(m)
 	if errDial != nil {
 		log.Fatal(errDial.Error())
 	}

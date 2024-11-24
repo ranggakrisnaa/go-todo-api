@@ -5,9 +5,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func InitPostgres() *gorm.DB {
-	postgresqlConf := NewPostgresConfig()
-	return postgresqlConf.NewPostgresConnection()
+func InitPostgreDB() *gorm.DB {
+	dbConfig := NewGormConfig()
+	return dbConfig.NewGormConnection()
 }
 
 func InitLogger() *logrus.Logger {

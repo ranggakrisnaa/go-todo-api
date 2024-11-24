@@ -5,6 +5,7 @@ import (
 	"go-todo-api/internal/config"
 	"go-todo-api/internal/rest/middleware"
 	"go-todo-api/internal/util"
+	"go-todo-api/internal/workers"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gocraft/work"
+	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
 )
 
@@ -29,9 +32,30 @@ func init() {
 }
 
 func main() {
-	db := config.InitPostgres()
+	db := config.InitPostgreDB()
 	logger := config.InitLogger()
 	jwtService := config.InitJwtService(logger)
+
+	mailerConfig, err := config.NewMailerConfig()
+	if err != nil {
+		log.Fatalf("Failed to initialize mailer config: %v", err)
+	}
+	redisPool := &redis.Pool{
+		MaxActive:   50,
+		MaxIdle:     10,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp", "localhost:6379")
+		},
+	}
+
+	workerPool := work.NewWorkerPool(workers.MailWorker{}, 10, "todo_queue", redisPool)
+
+	mailWorker := workers.NewMailWorker(logger, mailerConfig)
+	workerPool.Job("send_email", mailWorker.SendEmail)
+	enqueuer := work.NewEnqueuer("todo_queue", redisPool)
+	workerPool.Start()
+	defer workerPool.Stop()
 
 	r := gin.New()
 
@@ -60,6 +84,7 @@ func main() {
 		Log:        logger,
 		Route:      r,
 		JwtService: jwtService,
+		Enqueurer:  enqueuer,
 	})
 
 	address := os.Getenv("SERVER_ADDRESS")

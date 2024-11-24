@@ -60,3 +60,11 @@ func (r *TodoRepository) DeleteTodoTag(ctx context.Context, todoTags []entity.To
 	}
 	return nil
 }
+
+func (r *TodoRepository) FindUserById(ctx context.Context, id any) (*entity.User, error) {
+	var user entity.User
+	if err := r.DB.WithContext(ctx).Where("id = ?", id).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}

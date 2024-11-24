@@ -10,6 +10,7 @@ import (
 	"go-todo-api/internal/util"
 	"math"
 
+	"github.com/gocraft/work"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -26,6 +27,7 @@ type TodoRepository interface {
 	FindTodoTagByTodoID(ctx context.Context, todoID uint) ([]entity.TodoTag, error)
 	DeleteTodoTag(ctx context.Context, todoTags []entity.TodoTag) error
 	FindTodoTagByTagID(ctx context.Context, tagID uint) ([]entity.TodoTag, error)
+	FindUserById(ctx context.Context, id any) (*entity.User, error)
 }
 
 type TodoUsecase struct {
@@ -33,15 +35,44 @@ type TodoUsecase struct {
 	Log        *logrus.Logger
 	JwtService *config.JwtConfig
 	TodoRepo   TodoRepository
+	Enqueuer   *work.Enqueuer
 }
 
-func NewTodoUseCase(t TodoRepository, db *gorm.DB, logger *logrus.Logger, jwtService *config.JwtConfig) *TodoUsecase {
+func NewTodoUseCase(t TodoRepository, db *gorm.DB, logger *logrus.Logger, jwtService *config.JwtConfig, enqueuer *work.Enqueuer) *TodoUsecase {
 	return &TodoUsecase{
 		DB:         db,
 		Log:        logger,
 		TodoRepo:   t,
 		JwtService: jwtService,
+		Enqueuer:   enqueuer,
 	}
+}
+
+func (t *TodoUsecase) enqueueEmail(to string, todo *entity.Todo, status string) error {
+	subject := fmt.Sprintf("Your new todo \"%s\" has been %s successfully.", todo.Title, status)
+	body := fmt.Sprintf(`
+    <html>
+        <body>
+            <h2>Your new todo "<strong>%s</strong>" has been  %s successfully.</h2>
+            <p><strong>Status:</strong> %v</p>
+            <p><strong>Description:</strong> %s</p>
+            <p><strong>Due Time:</strong> %s</p>
+        </body>
+    </html>
+    `, todo.Title, status, todo.IsCompleted, todo.Description, todo.DueTime)
+
+	_, err := t.Enqueuer.Enqueue("send_email", work.Q{
+		"to":      to,
+		"subject": subject,
+		"body":    body,
+	})
+	if err != nil {
+		t.Log.WithError(err).Error("Failed to enqueue email task")
+		return err
+	}
+
+	t.Log.Info("Email task enqueued successfully")
+	return nil
 }
 
 func (t *TodoUsecase) Create(ctx context.Context, requests []*domain.TodoCreateRequest) ([]*domain.TodoResponse, error) {
@@ -85,6 +116,11 @@ func (t *TodoUsecase) Create(ctx context.Context, requests []*domain.TodoCreateR
 				tx.Rollback()
 				return nil, util.NewCustomError(int(util.ErrInternalServerErrorCode), err.Error())
 			}
+		}
+
+		user, _ := t.TodoRepo.FindUserById(ctx, todo.UserID)
+		if err := t.enqueueEmail(user.Email, &todo, "created"); err != nil {
+			t.Log.WithError(err).Error("Failed to enqueue email after creating todo")
 		}
 
 		todos = append(todos, converter.TodoToResponse(&todo))
