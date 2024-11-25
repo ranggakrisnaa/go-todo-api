@@ -13,7 +13,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./app:/build/app  # Pastikan volume cocok dengan struktur proyek
+      - ./app:/build/app  
 
   postgres:
     image: postgres:15
