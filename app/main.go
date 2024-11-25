@@ -14,8 +14,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gocraft/work"
-	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -32,28 +32,28 @@ func init() {
 }
 
 func main() {
-	db := config.InitPostgreDB()
-	logger := config.InitLogger()
-	jwtService := config.InitJwtService(logger)
-
-	mailerConfig, err := config.NewMailerConfig()
+	db, err := config.InitPostgreDB()
 	if err != nil {
-		log.Fatalf("Failed to initialize mailer config: %v", err)
+		logrus.Fatalf("Failed to initialize mailer config: %v", err)
 	}
-	redisPool := &redis.Pool{
-		MaxActive:   50,
-		MaxIdle:     10,
-		IdleTimeout: 240 * time.Second,
-		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", "localhost:6379")
-		},
+	jwtService, err := config.InitJwtService()
+	if err != nil {
+		logrus.Fatalf("Failed to initialize mailer config: %v", err)
+	}
+	mailerConfig, err := config.InitMailer()
+	if err != nil {
+		logrus.Fatalf("Failed to initialize mailer config: %v", err)
+	}
+	redisPool, err := config.InitRedis()
+	if err != nil {
+		logrus.Fatalf("Failed to initialize redis pool config: %v", err)
 	}
 
 	workerPool := work.NewWorkerPool(workers.MailWorker{}, 10, "todo_queue", redisPool)
-
-	mailWorker := workers.NewMailWorker(logger, mailerConfig)
+	mailWorker := workers.NewMailWorker(config.NewLogger(), mailerConfig)
 	workerPool.Job("send_email", mailWorker.SendEmail)
 	enqueuer := work.NewEnqueuer("todo_queue", redisPool)
+
 	workerPool.Start()
 	defer workerPool.Stop()
 
@@ -62,7 +62,7 @@ func main() {
 	timeoutStr := os.Getenv("CONTEXT_TIMEOUT")
 	timeout, err := strconv.Atoi(timeoutStr)
 	if err != nil {
-		log.Println("failed to parse timeout, using default timeout")
+		logrus.Fatalf("failed to parse timeout, using default timeout: %v", err)
 		timeout = defaultTimeout
 	}
 	timeoutContext := time.Duration(timeout) * time.Second
@@ -81,7 +81,7 @@ func main() {
 
 	internal.Bootstrap(&internal.BootstrapConfig{
 		DB:         db,
-		Log:        logger,
+		Log:        config.NewLogger(),
 		Route:      r,
 		JwtService: jwtService,
 		Enqueurer:  enqueuer,

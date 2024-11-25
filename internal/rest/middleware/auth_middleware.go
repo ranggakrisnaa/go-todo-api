@@ -31,7 +31,7 @@ func NewAuth(userUseCase *usecase.UserUsecase) gin.HandlerFunc {
 
 		userUseCase.Log.Debugf("Authorization: %s", token)
 
-		jwt, _ := config.NewJwtConfig()
+		jwt, _ := config.InitJwtService()
 		claims, err := jwt.ValidateToken(token)
 		if err != nil {
 			userUseCase.Log.Warnf("Failed to validate user token: %+v", err)

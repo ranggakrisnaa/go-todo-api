@@ -21,7 +21,7 @@ type GormConfig struct {
 	DBName   string
 }
 
-func NewGormConfig() *GormConfig {
+func NewGormConfig(cfg *GormConfig) *GormConfig {
 	return &GormConfig{
 		Host:     os.Getenv("DATABASE_HOST"),
 		Port:     os.Getenv("DATABASE_PORT"),

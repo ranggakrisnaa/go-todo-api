@@ -1,10 +1,7 @@
 package config
 
 import (
-	"errors"
 	"log"
-	"os"
-	"strconv"
 
 	"gopkg.in/gomail.v2"
 )
@@ -17,27 +14,14 @@ type MailerConfig struct {
 	SmtpAuthPassword string
 }
 
-func NewMailerConfig() (*MailerConfig, error) {
-	smtpHost := os.Getenv("CONFIG_SMTP_HOST")
-	smtpPortStr := os.Getenv("CONFIG_SMTP_PORT")
-	senderName := os.Getenv("CONFIG_SMTP_SENDER")
-	smtpAuthEmail := os.Getenv("CONFIG_AUTH_EMAIL")
-	smtpAuthPassword := os.Getenv("CONFIG_AUTH_PASSWORD")
-	if smtpHost == "" || smtpPortStr == "" || smtpAuthEmail == "" || smtpAuthPassword == "" {
-		return nil, errors.New("SMTP configuration is missing")
-	}
-	smtpPort, err := strconv.Atoi(smtpPortStr)
-	if err != nil {
-		return nil, err
-	}
-
+func NewMailerConfig(cfg *MailerConfig) *MailerConfig {
 	return &MailerConfig{
-		SmtpHost:         smtpHost,
-		SmtpPort:         smtpPort,
-		SenderMailName:   senderName,
-		SmtpAuthEmail:    smtpAuthEmail,
-		SmtpAuthPassword: smtpAuthPassword,
-	}, nil
+		SmtpHost:         cfg.SmtpHost,
+		SmtpPort:         cfg.SmtpPort,
+		SenderMailName:   cfg.SenderMailName,
+		SmtpAuthEmail:    cfg.SmtpAuthEmail,
+		SmtpAuthPassword: cfg.SmtpAuthPassword,
+	}
 }
 
 func (c *MailerConfig) SendMail(to string, subject, message string) error {

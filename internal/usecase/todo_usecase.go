@@ -54,7 +54,7 @@ func (t *TodoUsecase) enqueueEmail(to string, todo *entity.Todo, status string) 
     <html>
         <body>
             <h2>Your new todo "<strong>%s</strong>" has been  %s successfully.</h2>
-            <p><strong>Status:</strong> %v</p>
+            <p><strong>Status Completed:</strong> %v</p>
             <p><strong>Description:</strong> %s</p>
             <p><strong>Due Time:</strong> %s</p>
         </body>
@@ -203,6 +203,11 @@ func (t *TodoUsecase) Update(ctx context.Context, requests []*domain.TodoUpdateR
 			}
 		}
 
+		user, _ := t.TodoRepo.FindUserById(ctx, todo.UserID)
+		if err := t.enqueueEmail(user.Email, todo, "updated"); err != nil {
+			t.Log.WithError(err).Error("Failed to enqueue email after updated todo")
+		}
+
 		todos = append(todos, converter.TodoToResponse(todo))
 	}
 
@@ -233,6 +238,10 @@ func (t *TodoUsecase) Delete(ctx context.Context, request *domain.TodoDeleteRequ
 		return nil, fmt.Errorf("failed to delete todo: %w", err)
 	}
 
+	user, _ := t.TodoRepo.FindUserById(ctx, todo.UserID)
+	if err := t.enqueueEmail(user.Email, todo, "deleted"); err != nil {
+		t.Log.WithError(err).Error("Failed to enqueue email after deleted todo")
+	}
 	deletedTodos = append(deletedTodos, converter.TodoUUIDToResponse(todo))
 
 	return deletedTodos, nil

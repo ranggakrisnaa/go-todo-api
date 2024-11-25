@@ -6,7 +6,6 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
-// RedisConfig represents Redis configuration
 type RedisConfig struct {
 	Host        string
 	Port        string
