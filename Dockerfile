@@ -1,6 +1,8 @@
 FROM golang:alpine
 
-RUN apk update && apk add --no-cache git
+RUN apk update && apk add --no-cache 
+
+RUN go install github.com/air-verse/air@latest
 
 WORKDIR /app
 
@@ -8,6 +10,4 @@ COPY . .
 
 RUN go mod tidy
 
-RUN go build -o binary ./app
-
-ENTRYPOINT ["/app/binary"]
+CMD ["air", "-c", ".air.toml"]

@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: go-todo-api
     volumes:
-      - ./config.json:/app/config.json  
+      - ./:/app 
       - ./db/migrations:/app/db/migrations 
     ports:
       - "9090:9090"   
