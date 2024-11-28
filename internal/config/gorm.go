@@ -56,10 +56,13 @@ func (config *GormConfig) NewGormConnection() *gorm.DB {
 	return dbConn
 }
 
-func RunMigrateDB() {
+func (config *GormConfig) RunMigrateDB() {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		config.User, config.Password, config.Host, config.Port, config.DBName)
+
 	m, err := migrate.New(
 		"file://db/migrations",
-		"postgres://postgres@localhost:5432/todo_db?sslmode=disable")
+		dsn)
 	if err != nil {
 		log.Fatalf("migration initialization error: %v", err)
 	}

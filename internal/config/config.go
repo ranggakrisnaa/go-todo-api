@@ -9,14 +9,14 @@ import (
 	"gorm.io/gorm"
 )
 
-func InitPostgreDB() (*gorm.DB, error) {
+func InitPostgreDB() (*gorm.DB, *GormConfig, error) {
 	host := os.Getenv("DATABASE_HOST")
 	port := os.Getenv("DATABASE_PORT")
 	user := os.Getenv("DATABASE_USER")
 	password := os.Getenv("DATABASE_PASS")
 	dbName := os.Getenv("DATABASE_NAME")
 	if host == "" || port == "" || user == "" || dbName == "" {
-		return nil, fmt.Errorf("database configuration is missing")
+		return nil, nil, fmt.Errorf("database configuration is missing")
 	}
 
 	dbConfig := NewGormConfig(&GormConfig{
@@ -26,7 +26,7 @@ func InitPostgreDB() (*gorm.DB, error) {
 		Password: password,
 		DBName:   dbName,
 	})
-	return dbConfig.NewGormConnection(), nil
+	return dbConfig.NewGormConnection(), dbConfig, nil
 }
 
 func InitJwtService() (*JwtConfig, error) {

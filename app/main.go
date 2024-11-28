@@ -28,11 +28,12 @@ func init() {
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	config.RunMigrateDB()
+	_, db, _ := config.InitPostgreDB()
+	db.RunMigrateDB()
 }
 
 func main() {
-	db, err := config.InitPostgreDB()
+	db, _, err := config.InitPostgreDB()
 	if err != nil {
 		logrus.Fatalf("Failed to initialize mailer config: %v", err)
 	}
