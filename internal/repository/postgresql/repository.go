@@ -44,3 +44,12 @@ func (r *BaseRepository[T]) Count(ctx context.Context, query string, args ...any
 		Count(&count).Error
 	return count, err
 }
+
+func (r *BaseRepository[T]) FindAllWithPagination(ctx context.Context, offset, limit int) (*[]T, error) {
+	var entities []T
+	err := r.DB.WithContext(ctx).Offset(offset).Limit(limit).Find(&entities).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entities, nil
+}

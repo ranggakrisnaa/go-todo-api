@@ -19,11 +19,14 @@ type BootstrapConfig struct {
 	JwtService *config.JwtConfig
 }
 
-func init() {}
-
 func Bootstrap(config *BootstrapConfig) {
 	userRepo := postgresql.NewUserRepository(config.DB)
-	userUsecase := usecase.NewUserUseCase(userRepo, config.DB, config.Log, config.JwtService)
+	userUsecase := usecase.NewUserUsecase(userRepo, config.DB, config.Log, config.JwtService)
 	authMiddleware := middleware.NewAuth(userUsecase)
 	rest.NewUserHandler(config.Route, userUsecase, config.Log, authMiddleware)
+
+	todoRepo := postgresql.NewTodoRepository(config.DB)
+	todoUsecase := usecase.NewTodoUseCase(todoRepo, config.DB, config.Log, config.JwtService)
+	rest.NewTodoHandler(config.Route, todoUsecase, config.Log)
+
 }
