@@ -9,6 +9,9 @@ services:
       - ./db/migrations:/app/db/migrations 
     ports:
       - "9090:9090"   
+    environment:
+      - DATABASE_HOST=go-todo-api-postgres
+      - REDIS_HOST=go-todo-api-redis
     env_file:
       - .env
     depends_on:
