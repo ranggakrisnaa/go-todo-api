@@ -5,22 +5,20 @@ services:
       dockerfile: Dockerfile
     container_name: go-todo-api
     volumes:
-      - ./config.json:/app/config.json   
+      - ./:/app 
+      - ./db/migrations:/app/db/migrations 
     ports:
       - "9090:9090"   
     environment:
-      - SERVER_ADDRESS = ":9090"
-      - CONTEXT_TIMEOUT = 2
-      - DATABASE_HOST = "localhost"
-      - DATABASE_PORT = "5432"
-      - DATABASE_USER = "postgres"
-      - DATABASE_PASS = rangga
-      - DATABASE_NAME = "todo_db"
-      - JWT_SECRET_KEY = "private-key"
-      - JWT_EXPIRATION_TIME = 3
+      - DATABASE_HOST=go-todo-api-postgres
+      - REDIS_HOST=go-todo-api-redis
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - go-network
 
@@ -43,8 +41,17 @@ services:
     networks:
       - go-network
 
+  redis:
+    image: redis:7
+    container_name: go-todo-api-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - go-network
+
 volumes:
   db_data:
 
 networks:
   go-network:
+    driver: bridge

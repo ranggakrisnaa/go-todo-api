@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type PostgresConfig struct {
+type GormConfig struct {
 	Host     string
 	Port     string
 	User     string
@@ -21,8 +21,8 @@ type PostgresConfig struct {
 	DBName   string
 }
 
-func NewPostgresConfig() *PostgresConfig {
-	return &PostgresConfig{
+func NewGormConfig(cfg *GormConfig) *GormConfig {
+	return &GormConfig{
 		Host:     os.Getenv("DATABASE_HOST"),
 		Port:     os.Getenv("DATABASE_PORT"),
 		User:     os.Getenv("DATABASE_USER"),
@@ -31,7 +31,7 @@ func NewPostgresConfig() *PostgresConfig {
 	}
 }
 
-func (config *PostgresConfig) NewPostgresConnection() *gorm.DB {
+func (config *GormConfig) NewGormConnection() *gorm.DB {
 	var dsn string
 	if config.Password == "" {
 		dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable",
@@ -56,10 +56,13 @@ func (config *PostgresConfig) NewPostgresConnection() *gorm.DB {
 	return dbConn
 }
 
-func RunMigrateDB() {
+func (config *GormConfig) RunMigrateDB() {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		config.User, config.Password, config.Host, config.Port, config.DBName)
+
 	m, err := migrate.New(
 		"file://db/migrations",
-		"postgres://postgres@localhost:5432/todo_db?sslmode=disable")
+		dsn)
 	if err != nil {
 		log.Fatalf("migration initialization error: %v", err)
 	}

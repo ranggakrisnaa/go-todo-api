@@ -7,19 +7,21 @@ import (
 )
 
 type TodoResponse struct {
-	UUID        uuid.UUID `json:"uuid"`
-	Title       string    `json:"title,omitempty" validate:"required,max=255"`
-	Description string    `json:"description,omitempty"  validate:"required"`
-	IsCompleted bool      `json:"is_completed,omitempty" validate:"required"`
-	DueTime     time.Time `json:"due_time,omitempty" validate:"required"`
-	CreatedAt   time.Time `json:"created_at,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	UUID        uuid.UUID     `json:"uuid"`
+	Title       string        `json:"title,omitempty"`
+	Description string        `json:"description,omitempty"`
+	IsCompleted bool          `json:"is_completed,omitempty"`
+	DueTime     time.Time     `json:"due_time,omitempty"`
+	CreatedAt   time.Time     `json:"created_at,omitempty"`
+	UpdatedAt   time.Time     `json:"updated_at,omitempty"`
+	Tags        []TagResponse `json:"tags"`
 }
 
 type TodoCreateRequest struct {
 	UUID        uuid.UUID `json:"uuid"`
 	UserID      uint      `json:"user_id"`
 	Title       string    `json:"title" validate:"required,max=255"`
+	TagID       []int     `json:"tag_id"`
 	Description string    `json:"description"  validate:"required"`
 	IsCompleted bool      `json:"is_completed"`
 	DueTime     time.Time `json:"due_time" validate:"required"`
@@ -30,6 +32,7 @@ type TodoUpdateRequest struct {
 	UUID        uuid.UUID `json:"uuid"`
 	UserID      uint      `json:"user_id"`
 	Title       string    `json:"title,omitempty" validate:"max=255"`
+	TagID       []int     `json:"tag_id"`
 	Description string    `json:"description,omitempty"`
 	IsCompleted bool      `json:"is_completed,omitempty"`
 	DueTime     time.Time `json:"due_time,omitempty"`

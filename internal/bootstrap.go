@@ -8,6 +8,7 @@ import (
 	"go-todo-api/internal/usecase"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gocraft/work"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -17,6 +18,7 @@ type BootstrapConfig struct {
 	Route      *gin.Engine
 	Log        *logrus.Logger
 	JwtService *config.JwtConfig
+	Enqueurer  *work.Enqueuer
 }
 
 func Bootstrap(config *BootstrapConfig) {
@@ -26,7 +28,11 @@ func Bootstrap(config *BootstrapConfig) {
 	rest.NewUserHandler(config.Route, userUsecase, config.Log, authMiddleware)
 
 	todoRepo := postgresql.NewTodoRepository(config.DB)
-	todoUsecase := usecase.NewTodoUseCase(todoRepo, config.DB, config.Log, config.JwtService)
+	todoUsecase := usecase.NewTodoUseCase(todoRepo, config.DB, config.Log, config.JwtService, config.Enqueurer)
 	rest.NewTodoHandler(config.Route, todoUsecase, config.Log)
+
+	tagRepo := postgresql.NewTagRepository(config.DB)
+	tagUsecase := usecase.NewTagUsecase(tagRepo, config.DB, config.Log, config.JwtService)
+	rest.NewTagHandler(config.Route, tagUsecase, config.Log)
 
 }

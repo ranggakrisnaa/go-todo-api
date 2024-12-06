@@ -2,8 +2,6 @@ package config
 
 import (
 	"errors"
-	"os"
-	"strconv"
 	"time"
 
 	"go-todo-api/internal/entity"
@@ -21,22 +19,10 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func NewJwtConfig() (*JwtConfig, error) {
-	jwtKey := os.Getenv("JWT_SECRET_KEY")
-	jwtExpStr := os.Getenv("JWT_EXPIRATION_TIME")
-
-	if jwtKey == "" || jwtExpStr == "" {
-		return nil, errors.New("JWT configuration is incomplete")
-	}
-
-	jwtExp, err := strconv.Atoi(jwtExpStr)
-	if err != nil {
-		return nil, errors.New("invalid JWT expiration time")
-	}
-
+func NewJwtConfig(cfg *JwtConfig) (*JwtConfig, error) {
 	return &JwtConfig{
-		JwtKey: jwtKey,
-		JwtExp: jwtExp,
+		JwtKey: cfg.JwtKey,
+		JwtExp: cfg.JwtExp,
 	}, nil
 }
 

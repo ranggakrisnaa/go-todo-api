@@ -22,7 +22,7 @@ func (e *TodoError) Error() string {
 	return e.Message
 }
 
-type TodoUseCase interface {
+type TodoUsecase interface {
 	Create(ctx context.Context, requests []*domain.TodoCreateRequest) ([]*domain.TodoResponse, error)
 	Update(ctx context.Context, requests []*domain.TodoUpdateRequest) ([]*domain.TodoResponse, error)
 	Delete(ctx context.Context, request *domain.TodoDeleteRequest) ([]*domain.TodoResponse, error)
@@ -32,10 +32,10 @@ type TodoUseCase interface {
 
 type TodoHandler struct {
 	Log     *logrus.Logger
-	UseCase TodoUseCase
+	UseCase TodoUsecase
 }
 
-func NewTodoHandler(r *gin.Engine, t TodoUseCase, log *logrus.Logger) {
+func NewTodoHandler(r *gin.Engine, t TodoUsecase, log *logrus.Logger) {
 	handler := &TodoHandler{
 		UseCase: t,
 		Log:     log,
